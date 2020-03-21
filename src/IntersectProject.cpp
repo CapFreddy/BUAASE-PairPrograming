@@ -1,4 +1,4 @@
-#include "Class.h"
+#include "Intersect.h"
 
 
 int main(int argc, char* argv[])
@@ -18,15 +18,16 @@ int main(int argc, char* argv[])
 		}
 	}
 	
-	Intersect intersect(inputFile);
+	Intersect intersect;
+	intersect.AddGeometryObjectFromFile(inputFile);
 	intersect.CalculateIntersections();
-	// cout << intersect.GetIntersectionNumber() << endl;	
-	
+	// cout << intersect.GetIntersectionNumber() << endl;
 	// intersect.ViewIntersections();
 
 	ofstream ofs;
 	ofs.open(outputFile, ios::out);
 	ofs << intersect.GetIntersectionNumber();
 	ofs.close();
+
 	return 0;
 }
