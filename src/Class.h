@@ -1,3 +1,5 @@
+#pragma once
+
 #include <math.h>
 #include <fstream>
 #include <iostream>
@@ -7,32 +9,64 @@
 #include <unordered_set>
 using namespace std;
 double constexpr EPS = 1e-10;
+int constexpr MAX_INTERSECT = 5000000;
+
+inline constexpr int sign(const int x) {
+	return x < 0 ? -1 : 1;
+}
 
 
-class GeoObject
+class Line
 {
 public:
 	char m_type;
-	GeoObject(char type) : m_type(type) {}
-};
-
-class Circle : public GeoObject
-{
-public:
-	long long m_x, m_y, m_r;
-	Circle(char type, int x, int y, int r) : GeoObject(type), m_x(x), m_y(y), m_r(r) {}
-};
-
-class Line : public GeoObject
-{
-public:
-	long long m_x1, m_y1, m_x2, m_y2;
-	long long m_xdiff, m_ydiff, m_det;
-	Line(char type, int x1, int y1, int x2, int y2) : GeoObject(type), m_x1(x1), m_y1(y1), m_x2(x2), m_y2(y2)
+	int m_x1, m_y1, m_x2, m_y2;
+	int m_xdiff, m_ydiff;
+	int m_maxx, m_minx, m_maxy, m_miny;
+	long long m_det;
+	Line(char type, int x1, int y1, int x2, int y2) : m_type(type), m_x1(x1), m_y1(y1), m_x2(x2), m_y2(y2)
 	{
-		m_xdiff = m_x1 - m_x2;
-		m_ydiff = m_y1 - m_y2;
-		m_det = m_x1 * m_y2 - m_x2 * m_y1;
+		m_xdiff = x1 - x2;
+		m_ydiff = y1 - y2;
+		if (type == 'S')
+		{
+			m_maxx = max(x1, x2);
+			m_minx = min(x1, x2);
+			m_maxy = max(y1, y2);
+			m_miny = min(y1, y2);
+		}
+		m_det = (long long)x1 * y2 - (long long)x2 * y1;
+	}
+
+	inline bool online(double x, double y)
+	{
+		bool online;
+		if (m_type == 'L')
+		{
+			online = true;
+		}
+		else if (m_type == 'R')
+		{
+			online = m_xdiff * (m_x1 - x) + m_ydiff * (m_y1 - y) >= -EPS;
+		}
+		else if (m_type == 'S')
+		{
+			online = m_minx <= x && x <= m_maxx &&
+				m_miny <= y && y <= m_maxy;
+		}
+		return online;
+	}
+};
+
+
+class Circle
+{
+public:
+	int m_x, m_y, m_r;
+	long long m_r2;
+	Circle(int x, int y, int r) : m_x(x), m_y(y), m_r(r)
+	{
+		m_r2 = (long long)r * r;
 	}
 };
 
@@ -43,41 +77,36 @@ public:
 	double m_x, m_y;
 	Node(double x, double y) : m_x(x), m_y(y) {}
 
-	bool online(Line* line)
+	inline bool operator< (const Node& node) const
 	{
-		bool online;
-		if (line->m_type == 'L')
+		if (*this == node)
 		{
-			online = true;
+			return false;
 		}
-		else if (line->m_type == 'R')
+		if (fabs(m_x - node.m_x) <= EPS)
 		{
-			online = line->m_xdiff * (line->m_x1 - m_x) + line->m_ydiff * (line->m_y1 - m_y) >= -EPS;
+			return m_y - node.m_y < EPS;
 		}
-		else if (line->m_type == 'S')
-		{
-			online = min(line->m_x1, line->m_x2) <= m_x && m_x <= max(line->m_x1, line->m_x2) &&
-				min(line->m_y1, line->m_y2) <= m_y && m_y <= max(line->m_y1, line->m_y2);
-		}
-		return online;
+		return m_x - node.m_x < EPS;
 	}
-};
 
-struct NodePointerHasher
-{
-	size_t operator()(const Node* node) const noexcept
+	bool operator==(const Node& node) const
 	{
-		return hash<double>{}(round((node->m_x + node->m_y) * 1.0 / EPS));
+		return fabs(m_x - node.m_x) <= EPS && fabs(m_y - node.m_y) <= EPS;
 	}
 };
+namespace std
+{
+	template <>
+	struct hash<Node>
+	{
+		size_t operator()(const Node& obj) const
+		{
+			return hash<double>()(round(pow(obj.m_x, 3) + pow(obj.m_y, 3)) * 1.0 / EPS);
+		}
+	};
+}
 
-struct NodePointerComparator
-{
-	bool operator()(const Node* node1, const Node* node2) const noexcept
-	{
-		return fabs(node1->m_x - node2->m_x) <= EPS && fabs(node1->m_y - node2->m_y) <= EPS;
-	}
-};
 
 class Intersect
 {
@@ -86,7 +115,8 @@ public:
 	{
 		char type;
 		int N;
-		GeoObject* newGeoObject;
+		Line* newLine;
+		Circle* newCircle;
 		ifstream ifile;
 
 		ifile.open(inputFile, ios::in);
@@ -101,8 +131,8 @@ public:
 				int x1, y1, x2, y2;
 
 				ifile >> x1 >> y1 >> x2 >> y2;
-				newGeoObject = new Line(type, x1, y1, x2, y2);
-				m_allLines.push_back(newGeoObject);
+				newLine = new Line(type, x1, y1, x2, y2);
+				m_allLines.push_back(newLine);
 				break;
 			}
 			case 'C':
@@ -110,169 +140,229 @@ public:
 				int x, y, r;
 
 				ifile >> x >> y >> r;
-				newGeoObject = new Circle(type, x, y, r);
-				m_allCircles.push_back(newGeoObject);
+				newCircle = new Circle(x, y, r);
+				m_allCircles.push_back(newCircle);
 			}
 			default:
 				break;
 			}
-			m_allGeoObjects.push_back(newGeoObject);
 		}
 		ifile.close();
 	}
 
 	void CalculateIntersections()
 	{
+		m_allIntersections.reserve(5000000);
+
 		int i, j;
 		int lineNum = m_allLines.size();
 		int circleNum = m_allCircles.size();
-		GeoObject *lineOut, *lineIn, *circleOut, *circleIn;
+		Line *lineOut, *lineIn;
+		Circle *circleOut, *circleIn;
 		
 		// line-line and line-circle
-		for (i = 0; i < lineNum; i++)
+		for (i = 0; i < lineNum; ++i)
 		{
 			lineOut = m_allLines[i];
-			for (j = i + 1; j < lineNum; j++)
+			for (j = i + 1; j < lineNum; ++j)
 			{
 				lineIn = m_allLines[j];
 				LineLineIntersect(lineOut, lineIn);
+				//if (test.size() > MAX_INTERSECT)
+				//{
+				//	Filter();
+				//}
 			}
-			for (j = 0; j < circleNum; j++)
+			for (j = 0; j < circleNum; ++j)
 			{
 				circleIn = m_allCircles[j];
 				LineCircleIntersect(lineOut, circleIn);
+				//if (test.size() > MAX_INTERSECT)
+				//{
+				//	Filter();
+				//}
 			}
 		}
 
 		// circle-circle
-		for (i = 0; i < circleNum; i++)
+		for (i = 0; i < circleNum; ++i)
 		{
 			circleOut = m_allCircles[i];
-			for (j = i + 1; j < circleNum; j++)
+			for (j = i + 1; j < circleNum; ++j)
 			{
 				circleIn = m_allCircles[j];
 				CircleCircleIntersect(circleOut, circleIn);
 			}
+			//if (test.size() > MAX_INTERSECT)
+			//{
+			//	Filter();
+			//}
 		}
+		// Filter();
 		return;
 
 	}
 
-	int GetIntersectionNumber() { return m_allIntersections.size(); }
+	int GetIntersectionNumber()
+	{ 
+		return m_allIntersections.size();
+		// return test.size();
+	}
 
 	void ViewIntersections()
 	{
-		Node* curIntersection;
-		unordered_set<Node*, NodePointerHasher, NodePointerComparator>::iterator it;
-		for (it = m_allIntersections.begin(); it != m_allIntersections.end(); it++)
+		//Node* curIntersection;
+		//unordered_set<Node*, NodePointerHasher, NodePointerComparator>::iterator it;
+		//for (it = m_allIntersections.begin(); it != m_allIntersections.end(); it++)
+		//{
+		//	curIntersection = *it;
+		//	cout << curIntersection->m_x << " " << curIntersection->m_y << endl;
+		//}
+		
+		for (int i = 0; i < test.size(); ++i)
 		{
-			curIntersection = *it;
-			cout << curIntersection->m_x << " " << curIntersection->m_y << endl;
+			cout << test[i].m_x << " " << test[i].m_y << endl;
 		}
 		return;
 	}
 
 private:
-	vector<GeoObject*> m_allLines;
-	vector<GeoObject*> m_allCircles;
-	vector<GeoObject*> m_allGeoObjects;
-	unordered_set<Node*, NodePointerHasher, NodePointerComparator> m_allIntersections;
+	vector<Line*> m_allLines;
+	vector<Circle*> m_allCircles;
+	unordered_set<Node> m_allIntersections;
+	vector<Node> test;
 
-	void LineLineIntersect(GeoObject* _line1, GeoObject* _line2)
+	void LineLineIntersect(Line* line1, Line* line2)
 	{
-		Line *line1 = (Line*)_line1, *line2 = (Line*)_line2;
+		int line1_xdiff = line1->m_xdiff;
+		int line1_ydiff = line1->m_ydiff;
+		int line2_xdiff = line2->m_xdiff;
+		int line2_ydiff = line2->m_ydiff;
 
-		long long den = line1->m_xdiff * line2->m_ydiff - line1->m_ydiff * line2->m_xdiff;
+		// intermediate result type follows the first argument
+		long long den = (long long)line1_xdiff * line2_ydiff - (long long)line2_xdiff * line1_ydiff;
 		if (den != 0)
 		{
-			long long xmol = line1->m_det * line2->m_xdiff - line1->m_xdiff * line2->m_det;
-			long long ymol = line1->m_det * line2->m_ydiff - line1->m_ydiff * line2->m_det;
-			double x = (double)xmol / (double)den;
-			double y = (double)ymol / (double)den;
-			Node* intersection = new Node(x, y);
-			if (intersection->online(line1) && intersection->online(line2))
+			long long line1_det = line1->m_det;
+			long long line2_det = line2->m_det;
+
+			long long xmol = line1_det * line2_xdiff - line2_det * line1_xdiff;
+			long long ymol = line1_det * line2_ydiff - line2_det * line1_ydiff;
+			double x = (double)xmol / den;
+			double y = (double)ymol / den;
+			
+			if (line1->online(x, y) && line2->online(x, y))
 			{
-				m_allIntersections.insert(intersection);
+				m_allIntersections.emplace(x, y);
+				// test.emplace_back(x, y);
 			}
 		}
 		return;
 	}
 
-	void LineCircleIntersect(GeoObject* _line, GeoObject* _circle)
+	void LineCircleIntersect(Line* line, Circle* circle)
 	{
-		Line* line = (Line*)_line;
-		Circle* circle = (Circle*)_circle;
+		int line_xdiff = line->m_xdiff;
+		int line_ydiff = line->m_ydiff;
+		long long line_dis2 = line_xdiff * line_xdiff + line_ydiff * line_ydiff;
+		
+		int circle_x = circle->m_x;
+		int circle_y = circle->m_y;
+		long long circle_r2 = circle->m_r2;
 
-		double dis = sqrt(line->m_xdiff * line->m_xdiff + line->m_ydiff * line->m_ydiff);
-		long long det = (line->m_x1 - circle->m_x) * (line->m_y2 - circle->m_y) - (line->m_x2 - circle->m_x) * (line->m_y1 - circle->m_y);
-		double delta = circle->m_r * circle->m_r * dis * dis - det * det;
-		if (!(delta < -EPS))
+		int dx1 = line->m_x1 - circle_x;
+		int dx2 = line->m_x2 - circle_x;
+		int dy1 = line->m_y1 - circle_y;
+		int dy2 = line->m_y2 - circle_y;
+		long long det = (long long)dx1 * dy2 - (long long)dx2 * dy1;
+
+		long long delta = circle_r2 * line_dis2 - det * det;
+		if (!(delta < 0))
 		{
-			// delta >= 0
-			if (fabs(delta) <= EPS)
+			if (delta == 0)
 			{
-				// delta == 0
-				double x = (det * -line->m_ydiff) / (dis * dis) + circle->m_x;
-				double y = (det * line->m_xdiff) / (dis * dis) + circle->m_y;
-				Node* intersection = new Node(x, y);
-				if (intersection->online(line))
+				double x = (double)(det * -line_ydiff) / line_dis2 + circle_x;
+				double y = (double)(det * line_xdiff) / line_dis2 + circle_y;
+				
+				if (line->online(x, y))
 				{
-					m_allIntersections.insert(intersection);
+					m_allIntersections.emplace(x, y);
+					// test.emplace_back(x, y);
 				}
 			}
 			else
 			{
-				// delta > 0
-				double x1 = (det * -line->m_ydiff + copysign(1, -line->m_ydiff) * -line->m_xdiff * sqrt(delta)) / (dis * dis) + circle->m_x;
-				double y1 = (det * line->m_xdiff + fabs(line->m_ydiff) * sqrt(delta)) / (dis * dis) + circle->m_y;
-				Node* intersection = new Node(x1, y1);
-				if (intersection->online(line))
+				double sqrt_delta = sqrt(delta);
+				double x1 = (det * -line_ydiff + sign(-line_ydiff) * -line_xdiff * sqrt_delta) / line_dis2 + circle_x;
+				double y1 = (det * line_xdiff + abs(line_ydiff) * sqrt_delta) / line_dis2 + circle_y;
+
+				if (line->online(x1, y1))
 				{
-					m_allIntersections.insert(intersection);
+					m_allIntersections.emplace(x1, y1);
+					// test.emplace_back(x1, y1);
 				}
 
-				double x2 = (det * -line->m_ydiff - copysign(1, -line->m_ydiff) * -line->m_xdiff * sqrt(delta)) / (dis * dis) + circle->m_x;
-				double y2 = (det * line->m_xdiff - fabs(line->m_ydiff) * sqrt(delta)) / (dis *  dis) + circle->m_y;
-				intersection = new Node(x2, y2);
-				if (intersection->online(line))
+				double x2 = (det * -line_ydiff - sign(-line_ydiff) * -line_xdiff * sqrt_delta) / line_dis2 + circle_x;
+				double y2 = (det * line_xdiff - abs(line_ydiff) * sqrt_delta) / line_dis2 + circle_y;
+
+				if (line->online(x2, y2))
 				{
-					m_allIntersections.insert(intersection);
+					m_allIntersections.emplace(x2, y2);
+					// test.emplace_back(x2, y2);
 				}
 			}
 		}
 		return;
 	}
 
-	void CircleCircleIntersect(GeoObject* _circle1, GeoObject* _circle2)
+	void CircleCircleIntersect(Circle* circle1, Circle* circle2)
 	{
-		Circle *circle1 = (Circle*)_circle1, *circle2 = (Circle*)_circle2;
+		int circle1_x = circle1->m_x;
+		int circle1_y = circle1->m_y;
+		int circle1_r = circle1->m_r;
+		long long circle1_r2 = circle1->m_r2;
+		int circle2_x = circle2->m_x;
+		int circle2_y = circle2->m_y;
+		int circle2_r = circle2->m_r;
+		long long circle2_r2 = circle2->m_r2;
 
-		double dis = sqrt((circle1->m_x - circle2->m_x) * (circle1->m_x - circle2->m_x) + (circle1->m_y - circle2->m_y) * (circle1->m_y - circle2->m_y));
-		if (!(circle1->m_r + circle2->m_r < dis || fabs(circle1->m_r - circle2->m_r) > dis))
+		long long dis2 = (circle1_x - circle2_x) * (circle1_x - circle2_x) + (circle1_y - circle2_y) * (circle1_y - circle2_y);
+		double dis = sqrt((double)dis2);
+		if (!(circle1_r + circle2_r < dis || abs(circle1_r - circle2_r) > dis))
 		{
-			double a = (circle1->m_r * circle1->m_r - circle2->m_r * circle2->m_r + dis * dis) / (2 * dis);
-			double h = sqrt(circle1->m_r * circle1->m_r - a * a);
-			double x = circle1->m_x + a * (circle2->m_x - circle1->m_x) / dis;
-			double y = circle1->m_y + a * (circle2->m_y - circle1->m_y) / dis;
+			double a = (circle1_r2 - circle2_r2 + dis2) / (2 * dis);
+			double h = sqrt(circle1_r2 - a * a);
+			double x = circle1_x + a * (circle2_x - circle1_x) / dis;
+			double y = circle1_y + a * (circle2_y - circle1_y) / dis;
 
 			if (fabs(h) < EPS)
 			{
-				Node* intersection = new Node(x, y);
-				m_allIntersections.insert(intersection);
+				m_allIntersections.emplace(x, y);
+				// test.emplace_back(x, y);
 			}
 			else
 			{
-				double x1 = x + h * (circle2->m_y - circle1->m_y) / dis;
-				double y1 = y - h * (circle2->m_x - circle1->m_x) / dis;
-				Node* intersection = new Node(x1, y1);
-				m_allIntersections.insert(intersection);
+				double x1 = x + h * (circle2_y - circle1_y) / dis;
+				double y1 = y - h * (circle2_x - circle1_x) / dis;
 
-				double x2 = x - h * (circle2->m_y - circle1->m_y) / dis;
-				double y2 = y + h * (circle2->m_x - circle1->m_x) / dis;
-				intersection = new Node(x2, y2);
-				m_allIntersections.insert(intersection);
+				m_allIntersections.emplace(x1, y1);
+				// est.emplace_back(x1, y1);
+
+				double x2 = x - h * (circle2_y - circle1_y) / dis;
+				double y2 = y + h * (circle2_x - circle1_x) / dis;
+
+				m_allIntersections.emplace(x2, y2);
+				// test.emplace_back(x2, y2);
 			}
 		}
+		return;
+	}
+
+	void Filter()
+	{
+		sort(test.begin(), test.end());
+		vector<Node>::iterator newEnd = unique(test.begin(), test.end());
+		test.erase(newEnd, test.end());
 		return;
 	}
 };

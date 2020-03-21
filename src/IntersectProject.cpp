@@ -1,7 +1,6 @@
 #include "Class.h"
 
 
-
 int main(int argc, char* argv[])
 {
 
@@ -21,6 +20,8 @@ int main(int argc, char* argv[])
 	
 	Intersect intersect(inputFile);
 	intersect.CalculateIntersections();
+	// cout << intersect.GetIntersectionNumber() << endl;	
+	
 	// intersect.ViewIntersections();
 
 	ofstream ofs;
