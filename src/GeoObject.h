@@ -33,7 +33,6 @@ public:
 
 	inline bool online(double x, double y)
 	{
-		bool online;
 		switch (m_type)
 		{
 		case 'L':

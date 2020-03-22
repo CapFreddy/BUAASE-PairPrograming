@@ -114,6 +114,24 @@ private:
 
 		// intermediate result type follows the first argument
 		long long den = (long long)line1_xdiff * line2_ydiff - (long long)line2_xdiff * line1_ydiff;
+		if (den == 0 && line1.m_type != 'L' && line2.m_type != 'L')
+		{
+			int x1 = line1.m_x1;
+			int y1 = line1.m_y1;
+			int x2 = line1.m_x2;
+			int y2 = line1.m_y2;
+			
+			if ((x1 == line2.m_x1 && y1 == line2.m_y1) ||
+				(x1 == line2.m_x2 && y1 == line2.m_y2))
+			{
+				m_allIntersections.emplace(x1, y1);
+			}
+			else if ((x2 == line2.m_x1 && y2 == line2.m_y1) ||
+				(x2 == line2.m_x2 && y2 == line2.m_y2))
+			{
+				m_allIntersections.emplace(x2, y2);
+			}
+		}
 		if (den != 0)
 		{
 			long long line1_det = line1.m_det;
