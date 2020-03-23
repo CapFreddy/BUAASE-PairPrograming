@@ -284,6 +284,14 @@ public:
 		return intersections;
 	}
 
+	void reset()
+	{
+		m_allLines.clear();
+		m_allCircles.clear();
+		m_allIntersections.clear();
+		return;
+	}
+
 	void clear()
 	{
 		m_allIntersections.clear();

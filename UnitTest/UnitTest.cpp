@@ -1,7 +1,6 @@
 ﻿#include "CppUnitTest.h"
 #include "../IntersectProject/Intersect.h"
 #include "../IntersectProjectDLL/Interface.h"
-#pragma comment(lib, "..\\Debug\\IntersectProjectDLL.dll")
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
 namespace UnitTest
@@ -120,9 +119,10 @@ namespace UnitTest
 
 	TEST_CLASS(InterfaceTest)
 	{
+		string testFolder = "../testcase/dll/";
 		TEST_METHOD(TestDLL)
 		{
-			string testFolder = "../testcase/dll/";
+			reset();
 			string testFile = testFolder + "dll.txt";
 			readFile(testFile);
 			addGeometryObject("R 0 -1 0 -2");
@@ -130,6 +130,89 @@ namespace UnitTest
 			Assert::AreEqual((int)(getResult().second).size(), 13);
 			removeGeometryObject("C 0 2 2");
 			Assert::AreEqual((int)(getResult().second).size(), 10);
+		}
+	};
+	
+	TEST_CLASS(ExceptionTest)
+	{
+		string testFolder = "../testcase/exception/";
+		TEST_METHOD(FileNotFound)
+		{
+			string testfile = testFolder + "nowhere.txt";
+			try
+			{
+				readFile(testfile);
+			}
+			catch (Exception e)
+			{
+				Assert::AreEqual(e.m_excType, 1);
+			}
+		}
+
+		TEST_METHOD(FileFormat)
+		{
+			string testfile = testFolder + "exception1.txt";
+			try
+			{
+				readFile(testfile);
+			}
+			catch (Exception e)
+			{
+				Assert::AreEqual(e.m_excType, 2);
+			}
+		}
+
+		TEST_METHOD(CoordinateLimitExceed)
+		{
+			string testfile = testFolder + "exception2.txt";
+			try
+			{
+				readFile(testfile);
+			}
+			catch (Exception e)
+			{
+				Assert::AreEqual(e.m_excType, 3);
+			}
+		}
+
+		TEST_METHOD(LineDefinition)
+		{
+			string testfile = testFolder + "exception3.txt";
+			try
+			{
+				readFile(testfile);
+			}
+			catch (Exception e)
+			{
+				Assert::AreEqual(e.m_excType, 4);
+			}
+		}
+
+		TEST_METHOD(CircleDefinition)
+		{
+			string testfile = testFolder + "exception4.txt";
+			try
+			{
+				readFile(testfile);
+			}
+			catch (Exception e)
+			{
+				Assert::AreEqual(e.m_excType, 5);
+			}
+		}
+
+		TEST_METHOD(InfiniteIntersection)
+		{
+			string testfile = testFolder + "exception5.txt";
+			try
+			{
+				readFile(testfile);
+				getResult();
+			}
+			catch (Exception e)
+			{
+				Assert::AreEqual(e.m_excType, 6);
+			}
 		}
 	};
 }

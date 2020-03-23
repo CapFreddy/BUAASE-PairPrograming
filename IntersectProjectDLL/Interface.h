@@ -5,6 +5,8 @@ using namespace std;
 typedef pair<double, double> Point;
 
 
+__declspec(dllexport) void reset();
+
 // parameter = file_name
 __declspec(dllexport) void readFile(string);
 
