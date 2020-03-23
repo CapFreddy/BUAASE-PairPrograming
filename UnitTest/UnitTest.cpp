@@ -101,7 +101,7 @@ namespace UnitTest
 
 		TEST_METHOD(ComprehensiveTest)
 		{
-			vector<int> results = { 6, 11, 13 };
+			vector<int> results = { 6, 11, 13, 13 };
 			string segmentFolder = testFolder + "comprehensive/";
 
 			for (size_t i = 1; i <= results.size(); ++i)

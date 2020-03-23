@@ -1,24 +1,22 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <set>
 #include <unordered_set>
-#include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <strstream>
 #include "GeoObject.h"
-
-
 int constexpr MAX_INTERSECT = 5000000;
+typedef pair<double, double> Point;
+inline constexpr double sign(const double x) {
+	return x < EPS ? -1 : 1;
+}
 
 
 class Intersect
 {
 public:
-	Intersect()
-	{
-		m_allIntersections.reserve(MAX_INTERSECT);
-	}
-
 	void AddGeometryObjectFromFile(string inputFile)
 	{
 		char type;
@@ -46,6 +44,7 @@ public:
 
 				ifile >> x >> y >> r;
 				m_allCircles.emplace_back(x, y, r);
+				break;
 			}
 			default:
 				break;
@@ -54,6 +53,86 @@ public:
 		ifile.close();
 	}
 
+	void AddGeometryObjectByString(string geoObject)
+	{
+		char type;
+		istrstream strin(geoObject.c_str());
+
+		strin >> type;
+		switch (type)
+		{
+		case 'L': case 'R': case 'S':
+		{
+			int x1, y1, x2, y2;
+
+			strin >> x1 >> y1 >> x2 >> y2;
+			m_allLines.emplace_back(type, x1, y1, x2, y2);
+			break;
+		}
+		case 'C':
+		{
+			int x, y, r;
+
+			strin >> x >> y >> r;
+			m_allCircles.emplace_back(x, y, r);
+			break;
+		}
+		default:
+			break;
+		}
+		return;
+	}
+
+	void RemoveGeometryObjectByString(string geoObject)
+	{
+		char type;
+		istrstream strin(geoObject.c_str());
+
+		strin >> type;
+		switch (type)
+		{
+		case 'L': case 'R': case 'S':
+		{
+			int x1, y1, x2, y2;
+			
+			strin >> x1 >> y1 >> x2 >> y2;
+			Line removeLine(type, x1, y1, x2, y2);
+			
+			vector<Line>::iterator it = m_allLines.begin();
+			while (it != m_allLines.end())
+			{
+				if (*it == removeLine)
+				{
+					it = m_allLines.erase(it);
+					continue;
+				}
+				++it;
+			}
+			break;
+		}
+		case 'C':
+		{
+			int x, y, r;
+
+			strin >> x >> y >> r;
+			Circle removeCircle(x, y, r);
+
+			vector<Circle>::iterator it = m_allCircles.begin();
+			while (it != m_allCircles.end())
+			{
+				if (*it == removeCircle)
+				{
+					it = m_allCircles.erase(it);
+					continue;
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	
 	void CalculateIntersections()
 	{
 		int i, j;
@@ -98,6 +177,46 @@ public:
 			cout << (*it).m_x << " " << (*it).m_y << endl;
 		}
 		return;
+	}
+
+	vector<string> GetGeoObjects()
+	{
+		vector<string> geoObjects;
+		vector<Line>::iterator itLine;
+		vector<Circle>::iterator itCircle;
+
+		for (itLine = m_allLines.begin(); itLine != m_allLines.end(); ++itLine)
+		{
+			string geoObject;
+			geoObject.push_back((*itLine).m_type);
+			geoObject += " " +
+				to_string((*itLine).m_x1) + " " + to_string((*itLine).m_y1) + " " +
+				to_string((*itLine).m_x2) + " " + to_string((*itLine).m_y2);
+			geoObjects.push_back(geoObject);
+		}
+
+		for (itCircle = m_allCircles.begin(); itCircle != m_allCircles.end(); ++itCircle)
+		{
+			string geoObject;
+			geoObject.push_back('C');
+			geoObject += " " +
+				to_string((*itCircle).m_x) + " " + to_string((*itCircle).m_y) + " " + to_string((*itCircle).m_r);
+			geoObjects.push_back(geoObject);
+		}
+		return geoObjects;
+	}
+	
+	vector<Point> GetIntersections()
+	{
+		vector<Point> intersections;
+		unordered_set<Node>::iterator it;
+
+		for (it = m_allIntersections.begin(); it != m_allIntersections.end(); ++it)
+		{
+			Point curPoint((*it).m_x, (*it).m_y);
+			intersections.push_back(curPoint);
+		}
+		return intersections;
 	}
 
 private:
@@ -145,7 +264,6 @@ private:
 			if (line1.online(x, y) && line2.online(x, y))
 			{
 				m_allIntersections.emplace(x, y);
-				// test.emplace_back(x, y);
 			}
 		}
 		return;
@@ -153,27 +271,27 @@ private:
 
 	void LineCircleIntersect(Line line, Circle circle)
 	{
-		int line_xdiff = line.m_xdiff;
-		int line_ydiff = line.m_ydiff;
-		long long line_dis2 = line_xdiff * line_xdiff + line_ydiff * line_ydiff;
+		double line_xdiff = line.m_xdiff;
+		double line_ydiff = line.m_ydiff;
+		double line_dis2 = line_xdiff * line_xdiff + line_ydiff * line_ydiff;
 
-		int circle_x = circle.m_x;
-		int circle_y = circle.m_y;
-		long long circle_r2 = circle.m_r2;
+		double circle_x = circle.m_x;
+		double circle_y = circle.m_y;
+		double circle_r2 = circle.m_r2;
 
-		int dx1 = line.m_x1 - circle_x;
-		int dx2 = line.m_x2 - circle_x;
-		int dy1 = line.m_y1 - circle_y;
-		int dy2 = line.m_y2 - circle_y;
-		long long det = (long long)dx1 * dy2 - (long long)dx2 * dy1;
+		double dx1 = line.m_x1 - circle_x;
+		double dx2 = line.m_x2 - circle_x;
+		double dy1 = line.m_y1 - circle_y;
+		double dy2 = line.m_y2 - circle_y;
+		double det = dx1 * dy2 - dx2 * dy1;
 
-		long long delta = circle_r2 * line_dis2 - det * det;
+		double delta = circle_r2 * line_dis2 - det * det;
 		if (!(delta < 0))
 		{
 			if (delta == 0)
 			{
-				double x = (double)(det * -line_ydiff) / line_dis2 + circle_x;
-				double y = (double)(det * line_xdiff) / line_dis2 + circle_y;
+				double x = (det * -line_ydiff) / line_dis2 + circle_x;
+				double y = (det * line_xdiff) / line_dis2 + circle_y;
 
 				if (line.online(x, y))
 				{
@@ -184,7 +302,7 @@ private:
 			{
 				double sqrt_delta = sqrt(delta);
 				double x1 = (det * -line_ydiff + sign(-line_ydiff) * -line_xdiff * sqrt_delta) / line_dis2 + circle_x;
-				double y1 = (det * line_xdiff + abs(line_ydiff) * sqrt_delta) / line_dis2 + circle_y;
+				double y1 = (det * line_xdiff + fabs(line_ydiff) * sqrt_delta) / line_dis2 + circle_y;
 
 				if (line.online(x1, y1))
 				{
@@ -192,7 +310,7 @@ private:
 				}
 
 				double x2 = (det * -line_ydiff - sign(-line_ydiff) * -line_xdiff * sqrt_delta) / line_dis2 + circle_x;
-				double y2 = (det * line_xdiff - abs(line_ydiff) * sqrt_delta) / line_dis2 + circle_y;
+				double y2 = (det * line_xdiff - fabs(line_ydiff) * sqrt_delta) / line_dis2 + circle_y;
 
 				if (line.online(x2, y2))
 				{
@@ -205,18 +323,19 @@ private:
 
 	void CircleCircleIntersect(Circle circle1, Circle circle2)
 	{
-		int circle1_x = circle1.m_x;
-		int circle1_y = circle1.m_y;
-		int circle1_r = circle1.m_r;
-		long long circle1_r2 = circle1.m_r2;
-		int circle2_x = circle2.m_x;
-		int circle2_y = circle2.m_y;
-		int circle2_r = circle2.m_r;
-		long long circle2_r2 = circle2.m_r2;
+		double circle1_x = circle1.m_x;
+		double circle1_y = circle1.m_y;
+		double circle1_r = circle1.m_r;
+		double circle1_r2 = circle1.m_r2;
 
-		long long dis2 = (circle1_x - circle2_x) * (circle1_x - circle2_x) + (circle1_y - circle2_y) * (circle1_y - circle2_y);
-		double dis = sqrt((double)dis2);
-		if (!(circle1_r + circle2_r < dis || abs(circle1_r - circle2_r) > dis))
+		double circle2_x = circle2.m_x;
+		double circle2_y = circle2.m_y;
+		double circle2_r = circle2.m_r;
+		double circle2_r2 = circle2.m_r2;
+
+		double dis2 = (circle1_x - circle2_x) * (circle1_x - circle2_x) + (circle1_y - circle2_y) * (circle1_y - circle2_y);
+		double dis = sqrt(dis2);
+		if (!(circle1_r + circle2_r < dis || fabs(circle1_r - circle2_r) > dis))
 		{
 			double a = (circle1_r2 - circle2_r2 + dis2) / (2 * dis);
 			double h = sqrt(circle1_r2 - a * a);
@@ -241,5 +360,10 @@ private:
 			}
 		}
 		return;
+	}
+	
+	inline bool LineLineOverlap(Line line1, Line line2)
+	{
+
 	}
 };

@@ -21,8 +21,6 @@ int main(int argc, char* argv[])
 	Intersect intersect;
 	intersect.AddGeometryObjectFromFile(inputFile);
 	intersect.CalculateIntersections();
-	// cout << intersect.GetIntersectionNumber() << endl;
-	// intersect.ViewIntersections();
 
 	ofstream ofs;
 	ofs.open(outputFile, ios::out);
