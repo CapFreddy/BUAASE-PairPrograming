@@ -21,6 +21,7 @@ void addGeometryObject(string geoObject)
 
 void removeGeometryObject(string geoObject)
 {
+	intersect.clear();
 	intersect.RemoveGeometryObjectByString(geoObject);
 	return;
 }

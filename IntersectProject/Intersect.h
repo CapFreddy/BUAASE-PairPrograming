@@ -1,4 +1,5 @@
 #pragma once
+#include <regex>
 #include <string>
 #include <vector>
 #include <set>
@@ -6,55 +7,80 @@
 #include <fstream>
 #include <iostream>
 #include <strstream>
+#include <sstream>
 #include "GeoObject.h"
+#include "Exception.h"
+const regex NReg("(\\s*)(0|([1-9][0-9]*))(\\s*)");
+const regex LineReg("(\\s*)([LRS](\\s+-?(0|([1-9][0-9]*))){4})(\\s*)");
+const regex CircleReg("(\\s*)(C(\\s+-?(0|([1-9][0-9]*))){3})(\\s*)");
 int constexpr MAX_INTERSECT = 5000000;
+int constexpr MIN_CORD_BOUND = -100000;
+int constexpr MAX_CORD_BOUND = 100000;
 typedef pair<double, double> Point;
 inline constexpr double sign(const double x) {
 	return x < EPS ? -1 : 1;
+}
+inline constexpr bool exceed(const int x)
+{
+	return x <= MIN_CORD_BOUND || x >= MAX_CORD_BOUND;
 }
 
 
 class Intersect
 {
 public:
+	Intersect()
+	{
+		m_allIntersections.reserve(MAX_INTERSECT);
+	}
+
 	void AddGeometryObjectFromFile(string inputFile)
 	{
-		char type;
 		int N;
+		int lcnt = 0;
+		string line;
 		ifstream ifile;
 
-		ifile.open(inputFile, ios::in);
-		ifile >> N;
+		ifile.open(inputFile);
+		if (!ifile)
+		{
+			throw Exception(FileNotFoundException,
+				inputFile + " doesn't exist.");
+		}
+
+		
+		getline(ifile, line);
+		lcnt++;
+		if (!regex_match(line, NReg))
+		{
+			throw Exception(FileFormatException,
+				"input file must start with an integer.");
+		}
+
+		istrstream ss(line.c_str());
+		ss >> N;
 		while (N--)
 		{
-			ifile >> type;
-			switch (type)
-			{
-			case 'L': case 'R': case 'S':
-			{
-				int x1, y1, x2, y2;
-
-				ifile >> x1 >> y1 >> x2 >> y2;
-				m_allLines.emplace_back(type, x1, y1, x2, y2);
-				break;
-			}
-			case 'C':
-			{
-				int x, y, r;
-
-				ifile >> x >> y >> r;
-				m_allCircles.emplace_back(x, y, r);
-				break;
-			}
-			default:
-				break;
-			}
+			getline(ifile, line);
+			lcnt++;
+			AddGeometryObjectByString(line, lcnt);
 		}
 		ifile.close();
 	}
 
-	void AddGeometryObjectByString(string geoObject)
+	void AddGeometryObjectByString(string geoObject, int lcnt = 0)
 	{
+		if (!regex_match(geoObject, LineReg) && !regex_match(geoObject, CircleReg))
+		{
+			string excMsg = "wrong format of geometry object \"" + geoObject + "\"";
+			if (lcnt)
+			{
+				excMsg = excMsg + " at line " +  to_string(lcnt) + ".";
+			}
+
+			throw Exception(FileFormatException, excMsg);
+		}
+
 		char type;
 		istrstream strin(geoObject.c_str());
 
@@ -66,6 +92,26 @@ public:
 			int x1, y1, x2, y2;
 
 			strin >> x1 >> y1 >> x2 >> y2;
+			if (exceed(x1) || exceed(y1) || exceed(x2) || exceed(y2))
+			{
+				string excMsg = "coordinate(s) in \"" + geoObject + "\"";
+				if (lcnt)
+				{
+					excMsg = excMsg + " at line " + to_string(lcnt);
+				}
+				excMsg += " exceeds the bound of (-100000, 100000).";
+				throw Exception(CoordinateLimitExceedException, excMsg);
+			}
+			if (x1 == x2 && y1 == y2)
+			{
+				string excMsg = "two points collide in \"" + geoObject + "\"";
+				if (lcnt)
+				{
+					excMsg = excMsg + " at line " + to_string(lcnt);
+				}
+				excMsg += ".";
+				throw Exception(LineDefinitionException, excMsg);
+			}
 			m_allLines.emplace_back(type, x1, y1, x2, y2);
 			break;
 		}
@@ -74,6 +120,25 @@ public:
 			int x, y, r;
 
 			strin >> x >> y >> r;
+			if (exceed(x) || exceed(y))
+			{
+				string excMsg = "coordinate(s) in \"" + geoObject + "\"";
+				if (lcnt)
+				{
+					excMsg = excMsg + " at line " + to_string(lcnt);
+				}
+				excMsg += " exceeds the bound of (-100000, 100000).";
+				throw Exception(CoordinateLimitExceedException, excMsg);
+			}
+			if (r <= 0)
+			{
+				string excMsg = "radius of \"" + geoObject + "\"";
+				if (lcnt)
+				{
+					excMsg = excMsg + " at line " + to_string(lcnt);
+				}
+				excMsg += "is not greater than zero.";
+			}
 			m_allCircles.emplace_back(x, y, r);
 			break;
 		}
@@ -101,10 +166,10 @@ public:
 			vector<Line>::iterator it = m_allLines.begin();
 			while (it != m_allLines.end())
 			{
-				if (*it == removeLine)
+				if (removeLine == *it)
 				{
 					it = m_allLines.erase(it);
-					continue;
+					break;
 				}
 				++it;
 			}
@@ -120,10 +185,10 @@ public:
 			vector<Circle>::iterator it = m_allCircles.begin();
 			while (it != m_allCircles.end())
 			{
-				if (*it == removeCircle)
+				if (removeCircle == *it)
 				{
 					it = m_allCircles.erase(it);
-					continue;
+					break;
 				}
 			}
 			break;
@@ -219,11 +284,17 @@ public:
 		return intersections;
 	}
 
+	void clear()
+	{
+		m_allIntersections.clear();
+		return;
+	}
+
 private:
 	vector<Line> m_allLines;
 	vector<Circle> m_allCircles;
 	unordered_set<Node> m_allIntersections;
-
+	
 	void LineLineIntersect(Line line1, Line line2)
 	{
 		int line1_xdiff = line1.m_xdiff;
@@ -233,6 +304,17 @@ private:
 
 		// intermediate result type follows the first argument
 		long long den = (long long)line1_xdiff * line2_ydiff - (long long)line2_xdiff * line1_ydiff;
+		if (den == 0 && LineLineOverlap(line1, line2))
+		{
+			string excMsg = (string)"\"" +
+				line1.m_type + " " +
+				to_string(line1.m_x1) + " " + to_string(line1.m_y1) + " " + to_string(line1.m_x2) + " " + to_string(line1.m_y2) + "\"" +
+				" and \"" + line2.m_type + " " +
+				to_string(line2.m_x1) + " " + to_string(line2.m_y1) + " " + to_string(line2.m_x2) + " " + to_string(line2.m_y2) +
+				" overlap.";
+			throw Exception(InfinateIntersctionException, excMsg);
+
+		}
 		if (den == 0 && line1.m_type != 'L' && line2.m_type != 'L')
 		{
 			int x1 = line1.m_x1;
@@ -277,7 +359,7 @@ private:
 
 		double circle_x = circle.m_x;
 		double circle_y = circle.m_y;
-		double circle_r2 = circle.m_r2;
+		double circle_r2 = (double)circle.m_r2;
 
 		double dx1 = line.m_x1 - circle_x;
 		double dx2 = line.m_x2 - circle_x;
@@ -323,15 +405,24 @@ private:
 
 	void CircleCircleIntersect(Circle circle1, Circle circle2)
 	{
+		if (circle1 == circle2)
+		{
+			string excMsg = "\"C " + to_string(circle1.m_x) + " " + to_string(circle1.m_y) + "\" " +
+				"and \"C " + to_string(circle2.m_x) + " " + to_string(circle2.m_y) + "\" " +
+				"overlap.";
+			throw Exception(InfinateIntersctionException, excMsg);
+
+		}
+
 		double circle1_x = circle1.m_x;
 		double circle1_y = circle1.m_y;
 		double circle1_r = circle1.m_r;
-		double circle1_r2 = circle1.m_r2;
+		double circle1_r2 = (double)circle1.m_r2;
 
 		double circle2_x = circle2.m_x;
 		double circle2_y = circle2.m_y;
 		double circle2_r = circle2.m_r;
-		double circle2_r2 = circle2.m_r2;
+		double circle2_r2 = (double)circle2.m_r2;
 
 		double dis2 = (circle1_x - circle2_x) * (circle1_x - circle2_x) + (circle1_y - circle2_y) * (circle1_y - circle2_y);
 		double dis = sqrt(dis2);
@@ -364,6 +455,42 @@ private:
 	
 	inline bool LineLineOverlap(Line line1, Line line2)
 	{
+		double x1 = (double)(line1.m_x1 + line1.m_x2) / 2;
+		double y1 = (double)(line1.m_y1 + line1.m_y2) / 2;
+		double x2 = (double)(line2.m_x1 + line2.m_x2) / 2;
+		double y2 = (double)(line2.m_y1 + line2.m_y2) / 2;
 
+		double den = line1.m_xdiff * (y1 - y2) - (x1 - x2) * line1.m_ydiff;
+		if (fabs(den) <= EPS)
+		{
+			// colinear
+			if (line1.m_type == 'L' || line2.m_type == 'L')
+			{
+				return true;
+			}
+			if ((line2.m_minx < line1.m_x1 && line1.m_x1 < line2.m_maxx && line2.m_miny < line1.m_y1 && line1.m_y1 < line2.m_maxy) ||
+				(line2.m_minx < line1.m_x2 && line1.m_x2 < line2.m_maxx && line2.m_miny < line1.m_y2 && line1.m_y2 < line2.m_maxy))
+			{
+				return true;
+			}
+			if (line1.m_type == 'S' && line2.m_type == 'S')
+			{
+				return false;
+			}
+			if (line1.m_type == 'R' && line2.m_type == 'R')
+			{
+				return !(line1.m_xdiff * (line1.m_x1 - line2.m_x2) + line1.m_ydiff * (line1.m_y1 - line2.m_y1) <= 0 &&
+					(line2.m_x1 - line1.m_x1) * (line2.m_x2 - line1.m_x1) + (line2.m_y1 - line1.m_y1) * (line2.m_y2 - line1.m_y1) >= 0);
+			}
+			if (line1.m_type == 'R' && line2.m_type == 'S')
+			{
+				return line1.m_xdiff * (line1.m_x1 - line2.m_x1) + line1.m_ydiff * (line1.m_y1 - line2.m_y1) >= 0;
+			}
+			if (line1.m_type == 'S' && line2.m_type == 'R')
+			{
+				return line2.m_xdiff * (line2.m_x1 - line1.m_x1) + line2.m_ydiff * (line2.m_y1 - line1.m_y1) >= 0;
+			}
+		}
+		return false;
 	}
 };

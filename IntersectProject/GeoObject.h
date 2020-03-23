@@ -18,7 +18,7 @@ public:
 	{
 		m_xdiff = x1 - x2;
 		m_ydiff = y1 - y2;
-		if (type == 'S')
+		if (type != 'L')
 		{
 			m_maxx = max(x1, x2);
 			m_minx = min(x1, x2);

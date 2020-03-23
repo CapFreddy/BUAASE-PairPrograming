@@ -1,7 +1,8 @@
 ﻿#include "CppUnitTest.h"
 #include "../IntersectProject/Intersect.h"
+#include "../IntersectProjectDLL/Interface.h"
+#pragma comment(lib, "..\\Debug\\IntersectProjectDLL.dll")
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
-
 
 namespace UnitTest
 {
@@ -114,6 +115,21 @@ namespace UnitTest
 
 				Assert::AreEqual(intersect.GetIntersectionNumber(), results[i - 1]);
 			}
+		}
+	};
+
+	TEST_CLASS(InterfaceTest)
+	{
+		TEST_METHOD(TestDLL)
+		{
+			string testFolder = "../testcase/dll/";
+			string testFile = testFolder + "dll.txt";
+			readFile(testFile);
+			addGeometryObject("R 0 -1 0 -2");
+			addGeometryObject("R -1 0 -2 0");
+			Assert::AreEqual((int)(getResult().second).size(), 13);
+			removeGeometryObject("C 0 2 2");
+			Assert::AreEqual((int)(getResult().second).size(), 10);
 		}
 	};
 }
